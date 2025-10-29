@@ -278,7 +278,11 @@ PausableUpgradeable
             allPoolUpdate();
         }
         // 累计所有当前所有池子权重总数
-        totalPoolWeight += _poolWeight;
+        //优化gas ：： 先缓存storage变量的值，在进行操作，不要直接操作storage变量
+        totalPoolWeight+= _poolWeight;
+        // uint256 temptotalPoolWeight = totalPoolWeight;
+        // temptotalPoolWeight += _poolWeight;
+        // totalPoolWeight = temptotalPoolWeight;
         
         //防止状态污染，放到池子层，当添加池子时，为每个池子更新为最新的奖励区块高度
         uint256 lastRewardBlock = block.number>startBlock ? block.number : startBlock;
@@ -312,7 +316,12 @@ PausableUpgradeable
     }
     //更新池子队列中所有池子的状态，包括用户状态，池子状态等
     function allPoolUpdate() public {
-        for(uint pid=0;pid<pool.length;pid++){
+        //gas优化，使用uint256 / 缓存长度 / ++i
+        // for(uint pid=0;pid<pool.length;pid++){
+        //     updatePool(pid);
+        // }
+        uint256 poolLen = pool.length;
+        for (uint256 pid=0;pid<poolLen;++pid){
             updatePool(pid);
         }
     }
@@ -339,19 +348,19 @@ PausableUpgradeable
     }
     
     function _calculateMultiplier(uint256 lastRewardBlock) internal view returns (uint256) {
-                    console.log(startBlock);
+        // console.log(startBlock);
         if (startBlock > block.number) {
-            console.log(1111);
+            // console.log(1111);
             (bool success, uint256 multiplier) = lastRewardBlock.trySub(startBlock);
             require(success, "overflow");
             return multiplier;
         } else if (lastRewardBlock > endBlock) {
-                        console.log(2222);
+                        // console.log(2222);
             (bool success, uint256 multiplier) = endBlock.trySub(block.number);
             require(success, "overflow");
             return multiplier;
         } else {
-            console.log(3333);
+            // console.log(3333);
             // console.log("lastRewardBlock",lastRewardBlock);
             (bool success, uint256 multiplier) = block.number.trySub(startBlock);
             require(success, "overflow");
@@ -414,7 +423,8 @@ PausableUpgradeable
         require(_amount>pool_.minDepositAmount,"deposit amount is too small");
 
         if (_amount>0) {
-            IERC20(pool_.stTokenAddress).transferFrom(msg.sender,address(this),_amount);
+           (bool success) = IERC20(pool_.stTokenAddress).transferFrom(msg.sender,address(this),_amount);
+           require(success,"transfer error");
         }
         //更新池子的最新奖励收益，更新用户质押状态，更新用户奖励状态，更新池子累加奖励 ,同上deposit ETH，
         _deposit(_pid, _amount);
@@ -582,7 +592,6 @@ PausableUpgradeable
     function withdraw(uint256 _pid) public whenNotPaused() checkPid(_pid) whenNotWithdrawPaused(){
         Pool storage pool_ = pool[_pid];     
         User storage user_ = user[_pid][msg.sender];
-        
         for(uint256 i =user_.requests.length;i>0;--i){
             uint256 amount_ = user_.requests[i-1].amount;
             uint256 unblockNumber_ =user_.requests[i-1].unstakeBlocks;
